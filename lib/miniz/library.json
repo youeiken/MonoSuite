@@ -1,0 +1,12 @@
+{
+  "name": "miniz",
+  "version": "3.0.2",
+  "build": {
+    "srcDir": ".",
+    "flags": [
+      "-DMINIZ_NO_STDIO",
+      "-DMINIZ_NO_TIME",
+      "-DMINIZ_NO_ARCHIVE_WRITING_APIS"
+    ]
+  }
+}

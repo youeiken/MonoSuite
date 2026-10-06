@@ -1,0 +1,35 @@
+# PlatformIO build artifacts
+.pio/
+.pioenvs/
+.piolibdeps/
+.theia/
+.vscode/.browse.c_cpp.db*
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/ipch
+
+# Credentials
+wifi.txt
+
+# OS cruft
+.DS_Store
+.theia
+Thumbs.db
+
+# Editor backups
+*~
+*.swp
+
+# Build outputs that occasionally land in the project root
+*.bin
+*.elf
+*.map
+
+# Python bytecode (from scripts/)
+__pycache__/
+*.pyc
+
+# Custom
+/backup/
+wifi.txt
+wifi.json
