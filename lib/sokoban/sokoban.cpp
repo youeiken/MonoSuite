@@ -17,6 +17,13 @@ static void clearGrids();
 static bool detectDeadlock();
 
 // ============================================================
+// BtnA click classification: single vs double click
+// ============================================================
+static const unsigned long SK_DOUBLE_CLICK_MS = 300;   // window
+static unsigned long sk_pendingClickMs        = 0;            // 0 = no pending
+static bool          sk_pendingClick          = false;
+
+// ============================================================
 // Game State
 // ============================================================
 
@@ -827,6 +834,16 @@ void restartSokobanGame() {
     redrawSokobanQuality();
 }
 
+void loadPrevSokobanLevel() {
+    if (sk_levelCount == 0) return;
+    sk_levelIndex = (sk_levelIndex - 1 + sk_levelCount) % sk_levelCount;
+    loadLevel(sk_levelIndex);
+    String msg = "Level " + String(sk_levelIndex + 1) + "!";
+    redrawSokoban(msg.c_str());
+    delay(400);
+    redrawSokobanQuality();
+}
+
 void loadNextSokobanLevel() {
     if (sk_levelCount == 0) return;
     sk_levelIndex = (sk_levelIndex + 1) % sk_levelCount;
@@ -837,6 +854,42 @@ void loadNextSokobanLevel() {
     redrawSokobanQuality();
 }
 
+// Returns:
+//   1  = single click (fire "next level")
+//  -1  = double click (fire "previous level")
+//   0  = no action yet (either idle, or waiting for a possible
+//        second click)
+//
+// The single-click result is delayed by SK_DOUBLE_CLICK_MS so a
+// pending second click can upgrade it to a double-click.
+static int pollBtnAClick() {
+    // Register a fresh click.
+    if (M5.BtnA.wasClicked()) {
+        if (sk_pendingClick) {
+            // Second click arrived inside the window → double.
+            sk_pendingClick   = false;
+            sk_pendingClickMs = 0;
+            return -1;
+        }
+        // First click: remember it and wait.
+        sk_pendingClick   = true;
+        sk_pendingClickMs = millis();
+        return 0;
+    }
+
+    // If nothing is pending, nothing to do.
+    if (!sk_pendingClick) return 0;
+
+    // Pending click — has the window expired?
+    if (millis() - sk_pendingClickMs >= SK_DOUBLE_CLICK_MS) {
+        sk_pendingClick   = false;
+        sk_pendingClickMs = 0;
+        return 1;          // single click confirmed
+    }
+
+    return 0;              // still waiting
+}
+
 void sokobanLoop() {
     if (M5.BtnA.wasHold()) {
         if (confirmDialog("Quit?", "Return to the launcher?", "Quit", "Stay")) {
@@ -844,6 +897,16 @@ void sokobanLoop() {
         } else {
             redrawSokobanQuality();
         }
+        return;
+    }
+
+    // ---- BtnA click: single = next level, double = previous level ----
+    int click = pollBtnAClick();
+    if (click == 1) {
+        loadNextSokobanLevel();
+        return;
+    } else if (click == -1) {
+        loadPrevSokobanLevel();
         return;
     }
 
@@ -883,6 +946,8 @@ void sokobanLoop() {
         if (hitInfoButton(x, y)) {
             static const char* const sokobanHelp[] = {
                 "Swipe = Move the player",
+                "BtnA (short) = Next Level",
+                "BtnA (twice) = Previous Level",
                 "BtnB (short) = Undo (once per move)",
                 "",
                 "Hold BtnA = Launcher",

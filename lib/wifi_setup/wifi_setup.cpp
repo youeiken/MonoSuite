@@ -7,21 +7,23 @@
 #include <WiFi.h>
 
 // ============================================================
-// Load WiFi credentials from /wifi.txt
+// Load WiFi credentials from /config/wifi.txt
 // Looks on SD first, then LittleFS.
 // Returns true if both ssid and password were found.
 // ============================================================
+static const char* WIFI_CONFIG_PATH = "/config/wifi.txt";
+
 static bool loadWifiCredentials(String& ssid, String& password) {
     File f;
 
-    if (isSdMounted() && SD.exists("/wifi.txt")) {
-        f = SD.open("/wifi.txt", FILE_READ);
-        Serial.println("[WiFi] Reading /wifi.txt from SD");
-    } else if (LittleFS.exists("/wifi.txt")) {
-        f = LittleFS.open("/wifi.txt", FILE_READ);
-        Serial.println("[WiFi] Reading /wifi.txt from LittleFS");
+    if (isSdMounted() && SD.exists(WIFI_CONFIG_PATH)) {
+        f = SD.open(WIFI_CONFIG_PATH, FILE_READ);
+        Serial.printf("[WiFi] Reading %s from SD\n", WIFI_CONFIG_PATH);
+    } else if (LittleFS.exists(WIFI_CONFIG_PATH)) {
+        f = LittleFS.open(WIFI_CONFIG_PATH, FILE_READ);
+        Serial.printf("[WiFi] Reading %s from LittleFS\n", WIFI_CONFIG_PATH);
     } else {
-        Serial.println("[WiFi] /wifi.txt not found on SD or LittleFS");
+        Serial.printf("[WiFi] %s not found on SD or LittleFS\n", WIFI_CONFIG_PATH);
         return false;
     }
 
@@ -83,7 +85,7 @@ bool startWifiSetup() {
         M5.Display.setFont(&fonts::FreeSansBold18pt7b);
         M5.Display.drawString("No WiFi config", 20, 200);
         M5.Display.setFont(&fonts::FreeSans12pt7b);
-        M5.Display.drawString("Create /wifi.txt on SD:", 20, 280);
+        M5.Display.drawString("Create /config/wifi.txt on SD:", 20, 280);
         M5.Display.drawString("ssid=YourNetwork", 20, 320);
         M5.Display.drawString("password=YourPass", 20, 360);
         M5.Display.drawString("Tap to continue", 20, 500);

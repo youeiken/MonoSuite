@@ -32,7 +32,7 @@ static bool minesPlaced = false;
 // Save / Load progress
 // ============================================================
 
-static const char* MS_SAVE_PATH = "/minesweeper_save.txt";
+static const char* MS_SAVE_PATH = "/minesweeper/minesweeper_save.txt";
 
 static void saveProgress() {
     if (ms_gameOver || ms_won) {

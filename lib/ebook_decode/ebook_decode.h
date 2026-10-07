@@ -5,7 +5,7 @@
 #include <FS.h>
 #include <LittleFS.h>
 #include <SD.h>
-#include <string>
+#include <WString.h>
 #include <vector>
 
 // ============================================================

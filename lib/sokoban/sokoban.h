@@ -42,6 +42,7 @@ void restartSokobanGame();
 void redrawSokoban(const char* status = nullptr);
 void redrawSokobanQuality();
 void sokobanLoop();
+void loadPrevSokobanLevel();
 void loadNextSokobanLevel();
 
 // External

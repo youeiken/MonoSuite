@@ -25,8 +25,8 @@ static const int kReaderFontCount    = 3;
 static const int RESUME_MAX_BOOKS    = 16;
 static const int RESUME_RING_MAX     = 20;   // how many recent pages we remember
 static const char* FONT_PATH         = "/fonts/NotoSansTC-Subset.ttf";
-static const char* RESUME_PATH       = "/reader_resume.txt";
-static const char* READER_PREFS_PATH = "/reader_prefs.txt";
+static const char* RESUME_PATH       = "/reader/reader_resume.txt";
+static const char* READER_PREFS_PATH = "/readaer/reader_prefs.txt";
 static bool forceQualityNextPage     = false;
 
 // Resume save throttle

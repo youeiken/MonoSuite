@@ -4,7 +4,7 @@
 #include "ebook_decode.h"
 #include "storage.h"
 #include <Arduino.h>
-#include <string>
+#include <WString.h>
 
 // Structured EPUB load. Fills doc.chapters, doc.toc, doc.title.
 bool ebookEpubLoadDoc(const String& path, EbookDoc& doc);

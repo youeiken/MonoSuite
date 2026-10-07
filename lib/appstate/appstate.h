@@ -11,6 +11,11 @@
 // state transitions stay consistent.
 // ============================================================
 
+// ---- Screen brightness ---------------------------------------------------
+// 0..255. Restored on wake and on every mode entry.
+int  brightnessLevel();
+void setBrightnessLevel(int level);
+
 // ---- Sleep flag ----------------------------------------------------------
 bool isSleeping();
 void setSleeping(bool sleeping);

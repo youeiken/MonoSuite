@@ -9,6 +9,7 @@
 #include <M5Unified.h>
 
 // Function declarations (defined in launcher.cpp)
+void loadBrightnessPreference();
 void drawLauncher();
 void launcherLoop();
 void drawButton(int x, int y, int w, int h, const char* title, const char* sub);

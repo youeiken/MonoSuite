@@ -11,7 +11,7 @@
 #include <M5GFX.h>
 #include <M5Unified.h>
 #include <SD.h>
-#include <string>
+#include <WString.h>
 #include <vector>
 
 // ---- Resume cache ---------------------------------------------------------

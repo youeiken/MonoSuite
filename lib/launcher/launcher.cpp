@@ -9,8 +9,9 @@
 #include "wifi_setup.h"
 
 // Brightness levels for cycling
-const int BRIGHTNESS_LEVELS[] = {0, 32, 64, 96, 128, 192, 255};
-const int BRIGHTNESS_COUNT = 7;
+static const char* BRIGHTNESS_SAVE_PATH = "/config/brightness.txt";
+static const int BRIGHTNESS_LEVELS[] = {0, 32, 64, 96, 128, 192, 255};
+static const int BRIGHTNESS_COUNT = 7;
 
 // ============================================================
 // Header clock — centered between the back and info buttons
@@ -79,6 +80,14 @@ static const int BACK_BTN_X = 35;    // center x
 static const int BACK_BTN_Y = 45;    // center y (same baseline as info)
 static const int BACK_BTN_R = 15;    // radius (same as info)
 
+// Hit area for the back button: the entire top-left 80x80 square.
+// The glyph itself is drawn at BACK_BTN_X / BACK_BTN_Y with radius
+// BACK_BTN_R; only the tap target is enlarged.
+static const int BACK_HIT_X0 = 0;
+static const int BACK_HIT_Y0 = 0;
+static const int BACK_HIT_X1 = 80;   // exclusive
+static const int BACK_HIT_Y1 = 80;   // exclusive
+
 static void drawBackGlyph(int cx, int cy, int r) {
     // Arrow "<" with a thicker shaft. Strokes are offset along a small
     // 2D grid so both the shallow and steep parts of the angle fill in.
@@ -107,9 +116,11 @@ void drawBackButton() {
 }
 
 bool hitBackButton(int x, int y) {
-    int dx = x - BACK_BTN_X;
-    int dy = y - BACK_BTN_Y;
-    return (dx * dx + dy * dy) <= (BACK_BTN_R * BACK_BTN_R);
+    // int dx = x - BACK_BTN_X;
+    // int dy = y - BACK_BTN_Y;
+    // return (dx * dx + dy * dy) <= (BACK_BTN_R * BACK_BTN_R);
+    return (x >= BACK_HIT_X0 && x < BACK_HIT_X1 &&
+            y >= BACK_HIT_Y0 && y < BACK_HIT_Y1);
 }
 
 // ============================================================
@@ -118,6 +129,14 @@ bool hitBackButton(int x, int y) {
 static const int INFO_BTN_X = 440;   // center x
 static const int INFO_BTN_Y = 45;    // center y
 static const int INFO_BTN_R = 15;    // radius
+
+// Hit area for the info button: the entire top-right 80x80 square.
+// The glyph itself is drawn at INFO_BTN_X / INFO_BTN_Y with radius
+// INFO_BTN_R; only the tap target is enlarged.
+static const int INFO_HIT_X0 = 400;
+static const int INFO_HIT_Y0 = 0;
+static const int INFO_HIT_X1 = 480;  // exclusive
+static const int INFO_HIT_Y1 = 80;   // exclusive
 
 static void drawInfoButton() {
     M5.Display.fillCircle(INFO_BTN_X, INFO_BTN_Y, INFO_BTN_R, TFT_BLACK);
@@ -134,9 +153,11 @@ static void drawInfoButton() {
 }
 
 bool hitInfoButton(int x, int y) {
-    int dx = x - INFO_BTN_X;
-    int dy = y - INFO_BTN_Y;
-    return (dx * dx + dy * dy) <= (INFO_BTN_R * INFO_BTN_R);
+    // int dx = x - INFO_BTN_X;
+    // int dy = y - INFO_BTN_Y;
+    // return (dx * dx + dy * dy) <= (INFO_BTN_R * INFO_BTN_R);
+    return (x >= INFO_HIT_X0 && x < INFO_HIT_X1 &&
+            y >= INFO_HIT_Y0 && y < INFO_HIT_Y1);
 }
 
 // ============================================================
@@ -436,15 +457,45 @@ bool confirmDialog(const char* title,
 // Brightness
 // ============================================================
 void cycleBrightness() {
-    static int brightnessIndex = 2;
+    // Find the index of the current level.
+    int current = brightnessLevel();
+    int idx = 0;
+    for (int i = 0; i < BRIGHTNESS_COUNT; i++) {
+        if (BRIGHTNESS_LEVELS[i] == current) { idx = i; break; }
+    }
 
-    brightnessIndex = (brightnessIndex + 1) % BRIGHTNESS_COUNT;
-    int newBrightness = BRIGHTNESS_LEVELS[brightnessIndex];
-    M5.Display.setBrightness(newBrightness);
+    // Advance.
+    idx = (idx + 1) % BRIGHTNESS_COUNT;
+    int newLevel = BRIGHTNESS_LEVELS[idx];
+
+    setBrightnessLevel(newLevel);
+
+    // Persist.
+    File f;
+    if (storageOpenWrite(BRIGHTNESS_SAVE_PATH, f)) {
+        f.print(newLevel);
+        f.close();
+    }
 
     Serial.printf("Brightness: %d (%d%%)\n",
-                  newBrightness,
-                  (newBrightness * 100) / 255);
+                  newLevel, (newLevel * 100) / 255);
+}
+
+void loadBrightnessPreference() {
+    File f;
+    if (!storageOpenRead(BRIGHTNESS_SAVE_PATH, f)) {
+        // No saved value — keep the default.
+        return;
+    }
+    String s = f.readString();
+    f.close();
+    s.trim();
+    int level = s.toInt();
+    if (level < 0)   level = 0;
+    if (level > 255) level = 255;
+    setBrightnessLevel(level);
+    Serial.printf("[Brightness] Loaded %d from %s\n",
+                  level, BRIGHTNESS_SAVE_PATH);
 }
 
 // ============================================================

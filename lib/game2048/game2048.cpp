@@ -21,7 +21,7 @@ bool g2048_won = false;
 bool g2048_initialized = false;
 unsigned long g2048_lastActivity = 0;
 
-static const char* BEST_SCORE_PATH = "/2048_best.txt";
+static const char* BEST_SCORE_PATH = "/game2048/2048_best.txt";
 
 // ============================================================
 // Best score persistence
@@ -54,7 +54,7 @@ static void saveBestScore() {
 // Save / Load progress
 // ============================================================
 
-static const char* G2048_SAVE_PATH = "/2048_save.txt";
+static const char* G2048_SAVE_PATH = "/game2048/2048_save.txt";
 
 static void saveProgress() {
     if (g2048_gameOver) {

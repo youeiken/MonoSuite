@@ -48,9 +48,9 @@ following structure before first boot:
 ```
 /books/                          # Reader: .txt and .epub files
 /fonts/NotoSansTC-Subset.ttf     # Reader: required TTF for CJK and Latin
-/sleep.bmp                       # Optional; shown on the sleep screen
+/sleep/*.bmp                     # Optional; shown on the sleep screen randomly
 /sokoban/*.xsb                   # Sokoban: one or more XSB level files
-/wifi.txt                        # Optional; see wifi.txt.example
+/config/wifi.txt                 # Optional; see wifi.txt.example
 ```
 
 If the SD card is absent or fails to mount, the firmware falls back to
@@ -81,7 +81,7 @@ will be loaded in filename order.
 ### Build and upload
 
 ```bash
-git clone https://github.com/<your-username>/MonoLauncher.git
+git clone https://github.com/youeiken/MonoLauncher.git
 cd MonoLauncher
 pio run -t upload
 ```
@@ -226,7 +226,7 @@ by PlatformIO.
 
 ## License
 
-[MIT](LICENSE) © <your name>
+[MIT](LICENSE) © YOUEIKEN
 
 The bundled `lib/miniz/` directory is released under the MIT-0 / public
 domain license; see the header of `miniz.c` for the full text.

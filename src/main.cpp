@@ -62,11 +62,6 @@
 int currentMode = MODE_LAUNCHER;
 int sleepLastMinute = -1;
 
-// ---- shared display / light ----
-#define FRONT_LIGHT_DEFAULT 96
-// int frontlight = FRONT_LIGHT_DEFAULT;
-// const int FRONTLIGHT_LEVELS[] = {0, 32, 64, 96, 128, 192, 255};
-
 // ============================================================
 // Game-activity refresh — knows which mode is active, so it
 // belongs here rather than in appstate.
@@ -111,7 +106,7 @@ static bool chordTriggered(unsigned long holdMs = 1000) {
 void enterLauncher() {
     currentMode = MODE_LAUNCHER;
     setSleeping(false);
-    M5.Display.setBrightness(FRONT_LIGHT_DEFAULT);
+    setBrightnessLevel(brightnessLevel());
     M5.Display.setEpdMode(epd_mode_t::epd_quality);
 
     M5.Led.setAllColor(0, 0, 0);
@@ -123,7 +118,7 @@ void enterLauncher() {
 void enterReversi() {
     currentMode = MODE_REVERSI;
     setSleeping(false);
-    M5.Display.setBrightness(FRONT_LIGHT_DEFAULT);
+    setBrightnessLevel(brightnessLevel());
 
     if (rs_initialized) {
         rs_lastActivity = millis();
@@ -136,7 +131,7 @@ void enterReversi() {
 void enterGame2048() {
     currentMode = MODE_GAME2048;
     setSleeping(false);
-    M5.Display.setBrightness(FRONT_LIGHT_DEFAULT);
+    setBrightnessLevel(brightnessLevel());
 
     M5.Led.setAllColor(0, 0, 0);
     M5.Led.display();
@@ -151,7 +146,7 @@ void enterGame2048() {
 void enterMinesweeper() {
     currentMode = MODE_MINESWEEPER;
     setSleeping(false);
-    M5.Display.setBrightness(FRONT_LIGHT_DEFAULT);
+    setBrightnessLevel(brightnessLevel());
 
     M5.Led.setAllColor(0, 0, 0);
     M5.Led.display();
@@ -166,7 +161,7 @@ void enterMinesweeper() {
 void enterSokoban() {
     currentMode = MODE_SOKOBAN;
     setSleeping(false);
-    M5.Display.setBrightness(FRONT_LIGHT_DEFAULT);
+    setBrightnessLevel(brightnessLevel());
 
     M5.Led.setAllColor(0, 0, 0);
     M5.Led.display();
@@ -183,7 +178,7 @@ static bool booksScanned = false;
 void enterReader() {    
     currentMode = MODE_READER;
     setSleeping(false);
-    M5.Display.setBrightness(FRONT_LIGHT_DEFAULT);
+    setBrightnessLevel(brightnessLevel());
     // M5.Display.setEpdMode(epd_mode_t::epd_quality);
 
     // Turn off LED when not in game
@@ -284,6 +279,65 @@ void drawSleepClock() {
     M5.Display.drawString(timeStr, x, y);
 }
 
+// ============================================================
+// Sleep screen image selection
+//
+// Picks a random .bmp from /sleep/ on the SD card.
+// Falls back to /sleep.bmp at the SD root, then to nothing,
+// so old installations keep working.
+// ============================================================
+static bool pickSleepBmpPath(String& outPath) {
+    // ---- Try /sleep/ directory first ----
+    if (isSdMounted() && SD.exists("/sleep")) {
+        File dir = SD.open("/sleep");
+        if (dir && dir.isDirectory()) {
+            // Collect candidate .bmp files. Cap the count so a huge
+            // directory can't blow the stack.
+            const int MAX_CANDIDATES = 64;
+            String candidates[MAX_CANDIDATES];
+            int count = 0;
+
+            while (count < MAX_CANDIDATES) {
+                File entry = dir.openNextFile();
+                if (!entry) break;
+
+                if (!entry.isDirectory()) {
+                    String name = entry.name();
+                    String lower = name;
+                    lower.toLowerCase();
+                    if (lower.endsWith(".bmp")) {
+                        // SD.open gives us the base name; build the
+                        // full path so it's unambiguous.
+                        candidates[count] = String("/sleep/") + name;
+                        count++;
+                    }
+                }
+                entry.close();
+            }
+            dir.close();
+
+            if (count > 0) {
+                int pick = random(count);
+                outPath = candidates[pick];
+                Serial.printf("[Sleep] Picked %s (%d of %d)\n",
+                              outPath.c_str(), pick + 1, count);
+                return true;
+            }
+        }
+    }
+
+    // ---- Fall back to /sleep.bmp at the root ----
+    if (storageExists("/sleep.bmp")) {
+        outPath = "/sleep.bmp";
+        Serial.println("[Sleep] Using /sleep.bmp fallback");
+        return true;
+    }
+
+    // ---- Nothing available ----
+    outPath = "";
+    return false;
+}
+
 void enterSleep() {
     setSleeping(true);
     modeBeforeSleep = currentMode;
@@ -294,21 +348,24 @@ void enterSleep() {
 
     uint8_t* bmpBuffer = nullptr;
     size_t fileSize = 0;
-    const char* bmpPath = "/sleep.bmp";
 
+    String bmpPath;
     File targetFile;
-    storageOpenRead(bmpPath, targetFile);
 
-    if (targetFile) {
-        fileSize = targetFile.size();
-        if (fileSize > 0) {
-            bmpBuffer = (uint8_t*)heap_caps_malloc(fileSize, MALLOC_CAP_SPIRAM);
-            if (bmpBuffer != nullptr) {
-                targetFile.read(bmpBuffer, fileSize);
-                Serial.printf("[Sleep] Loaded %d bytes into PSRAM\n", fileSize);
+    if (pickSleepBmpPath(bmpPath) && bmpPath.length() > 0) {
+        storageOpenRead(bmpPath.c_str(), targetFile);
+        if (targetFile) {
+            fileSize = targetFile.size();
+            if (fileSize > 0) {
+                bmpBuffer = (uint8_t*)heap_caps_malloc(fileSize, MALLOC_CAP_SPIRAM);
+                if (bmpBuffer != nullptr) {
+                    targetFile.read(bmpBuffer, fileSize);
+                    Serial.printf("[Sleep] Loaded %d bytes from %s\n",
+                                fileSize, bmpPath.c_str());
+                }
             }
+            targetFile.close();
         }
-        targetFile.close();
     }
 
     beginDisplay();
@@ -343,7 +400,7 @@ void wakeUp() {
     if (!isSleeping()) return;
     setSleeping(false);
 
-    M5.Display.setBrightness(FRONT_LIGHT_DEFAULT);
+    setBrightnessLevel(brightnessLevel());
     M5.Display.setEpdMode(epd_mode_t::epd_quality);
     touchGlobalActivity();
 
@@ -382,7 +439,7 @@ void setup() {
     M5.begin(cfg);
 
     M5.Display.setRotation(0);
-    M5.Display.setBrightness(FRONT_LIGHT_DEFAULT);
+    setBrightnessLevel(brightnessLevel());
     M5.Display.setEpdMode(epd_mode_t::epd_quality);
 
     M5.Led.setAutoDisplay(false);
@@ -399,6 +456,8 @@ void setup() {
 
     setSdMounted(initSDCard());
     Serial.printf("[Boot] SD card: %s\n", isSdMounted() ? "✅ mounted" : "❌ NOT mounted");
+
+    loadBrightnessPreference();
     
     bool timeOk = ensureRtcTime(/*allowWifiFallback=*/true);
     Serial.printf("[Boot] RTC time: %s\n", timeOk ? "set" : "unset");

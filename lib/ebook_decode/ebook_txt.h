@@ -4,7 +4,7 @@
 #include "ebook_decode.h"
 #include "storage.h"
 #include <Arduino.h>
-#include <string>
+#include <WString.h>
 
 bool ebookTxtLoadDoc(const String& path, EbookDoc& doc);
 

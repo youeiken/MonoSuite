@@ -49,7 +49,7 @@ const int WEIGHTS[64] = {
 // Save / Load progress
 // ============================================================
 
-static const char* RS_SAVE_PATH = "/reversi_save.txt";
+static const char* RS_SAVE_PATH = "/reversi/reversi_save.txt";
 
 static void saveProgress() {
     if (rs_gameOver) {
