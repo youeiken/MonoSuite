@@ -14,7 +14,7 @@ void setSdMounted(bool mounted)     { s_sdMounted = mounted; }
 
 bool storageExists(const char* path) {
     if (path == nullptr) return false;
-    if (s_sdMounted && SD.exists(path)) return true;
+    if (s_sdMounted && SD_MMC.exists(path)) return true;
     if (LittleFS.exists(path)) return true;
     return false;
 }
@@ -22,8 +22,8 @@ bool storageExists(const char* path) {
 bool storageOpenRead(const char* path, File& out) {
     if (path == nullptr) return false;
 
-    if (s_sdMounted && SD.exists(path)) {
-        File tmp = SD.open(path, FILE_READ);
+    if (s_sdMounted && SD_MMC.exists(path)) {
+        File tmp = SD_MMC.open(path, FILE_READ);
         if (tmp) { out = tmp; return true; }
     }
 
@@ -39,9 +39,9 @@ bool storageOpenWrite(const char* path, File& out) {
     if (path == nullptr) return false;
 
     if (s_sdMounted) {
-        File tmp = SD.open(path, FILE_WRITE);
+        File tmp = SD_MMC.open(path, FILE_WRITE);
         if (tmp) { out = tmp; return true; }
-        // Fall through: if SD.open fails, try LittleFS as a last
+        // Fall through: if SD_MMC.open fails, try LittleFS as a last
         // resort. This shouldn't normally happen, but it's better
         // than dropping the write.
     }

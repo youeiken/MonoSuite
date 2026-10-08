@@ -6,7 +6,6 @@
 #include "storage.h"
 #include "touch.h"
 #include "time_sync.h"
-#include "wifi_setup.h"
 
 // Brightness levels for cycling
 static const char* BRIGHTNESS_SAVE_PATH = "/config/brightness.txt";
@@ -190,23 +189,6 @@ void drawHeader(const String& title, bool withBack) {
 
 void drawHeader(const String& title, const lgfx::IFont* font, bool withBack) {
     drawHeaderInternal(title, font, withBack);
-}
-
-// ============================================================
-// WiFi icon (unused, kept for future use)
-// ============================================================
-void drawWifiIcon() {
-    bool connected = isWifiConnected();
-
-    M5.Display.setFont(&fonts::FreeSansBold9pt7b);
-    M5.Display.setTextColor(TFT_BLACK, TFT_WHITE);
-
-    const char* label = connected ? "WiFi on" : "WiFi off";
-    int tw = M5.Display.textWidth(label);
-    int x = 330 - tw;
-    int y = 32;
-
-    M5.Display.drawString(label, x, y);
 }
 
 // ============================================================

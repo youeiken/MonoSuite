@@ -1,7 +1,7 @@
 #ifndef OFR_SD_PRESET_H
 #define OFR_SD_PRESET_H
 
-#include <SD.h>
+#include <SD_MMC.h>
 #include <list>
 #include <Arduino.h>
 
@@ -16,7 +16,7 @@ inline FT_FILE *OFR_fopen(const char *filename, const char *mode) {
         arduinoMode = FILE_WRITE;
     }
 
-    File f = SD.open(filename, arduinoMode);
+    File f = SD_MMC.open(filename, arduinoMode);
     if (!f) {
         Serial.printf("[OFR] fopen FAILED: %s\n", filename);
         return nullptr;

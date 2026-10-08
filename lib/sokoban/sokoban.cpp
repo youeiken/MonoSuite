@@ -8,7 +8,7 @@
 #include "touch.h"
 #include "savegame.h"
 #include <LittleFS.h>
-#include <SD.h>
+#include <SD_MMC.h>
 
 static void drawNextButton();
 static bool hitNextButton(int x, int y);
@@ -81,7 +81,7 @@ static bool   sk_hasLastMove = false;
 // Save / Load progress
 // ============================================================
 
-static const char* SK_SAVE_PATH = "/sokoban_save.txt";
+static const char* SK_SAVE_PATH = "sokoban/sokoban_save.txt";
 
 static void saveProgress() {
     if (sk_levelCount == 0) return;
@@ -233,12 +233,12 @@ static void loadXsbFiles() {
         Serial.println("[Sokoban] SD not mounted");
         return;
     }
-    if (!SD.exists("/sokoban")) {
+    if (!SD_MMC.exists("/sokoban")) {
         Serial.println("[Sokoban] /sokoban directory not found");
         return;
     }
 
-    File dir = SD.open("/sokoban");
+    File dir = SD_MMC.open("/sokoban");
     if (!dir || !dir.isDirectory()) {
         Serial.println("[Sokoban] Failed to open /sokoban");
         return;

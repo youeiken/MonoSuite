@@ -2,7 +2,7 @@
 #include "ofr_sd_preset.h"
 
 #include <OpenFontRender.h>
-#include <SD.h>
+#include <SD_MMC.h>
 
 static OpenFontRender s_render;
 static bool s_fontLoaded = false;
@@ -19,7 +19,7 @@ static int s_level = 1;
 bool readerFontInit(const char* path) {
     if (s_fontLoaded) return true;
 
-    File fontFile = SD.open(path, FILE_READ);
+    File fontFile = SD_MMC.open(path, FILE_READ);
     if (!fontFile) {
         Serial.printf("[readerFont] Cannot open %s\n", path);
         return false;

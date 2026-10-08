@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 #include <FS.h>
-#include <SD.h>
+#include <SD_MMC.h>
 #include <LittleFS.h>
 
 // ============================================================
@@ -35,7 +35,7 @@ void setSdMounted(bool mounted);
 bool storageOpenRead(const char* path, File& out);
 
 // Open a file for writing. Returns true on success. Note: this
-// does NOT guarantee the file is empty — SD.open(..., FILE_WRITE)
+// does NOT guarantee the file is empty — SD_MMC.open(..., FILE_WRITE)
 // appends if the file exists. Callers that need to truncate must
 // delete first, as the existing games already do.
 bool storageOpenWrite(const char* path, File& out);

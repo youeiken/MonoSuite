@@ -3,7 +3,7 @@
 // ============================================================
 // Screen brightness
 // ============================================================
-static int s_brightness = 96;   // matches FRONT_LIGHT_DEFAULT
+static int s_brightness = 64;
 
 int brightnessLevel() {
     return s_brightness;

@@ -1,8 +1,6 @@
 #include "time_sync.h"
 
-#include "wifi_setup.h"
 #include <time.h>
-#include <WiFi.h>
 
 static const int RTC_MIN_YEAR = 2024;
 
@@ -70,45 +68,6 @@ String displayTimeFromRTC() {
     return String(buf);
 }
 
-bool syncTimeFromNTP() {
-    if (!isWifiConnected()) {
-        Serial.println("[NTP] Not connected, skipping sync");
-        return false;
-    }
-
-    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-
-    Serial.print("[NTP] Syncing");
-    time_t now = 0;
-    int retries = 0;
-    while (now < 100000 && retries < 30) {
-        delay(500);
-        Serial.print(".");
-        now = time(nullptr);
-        retries++;
-    }
-    Serial.println();
-
-    if (now < 100000) {
-        Serial.println("[NTP] Sync failed");
-        return false;
-    }
-
-    if (M5.Rtc.isEnabled()) {
-        struct tm timeinfo;
-        gmtime_r(&now, &timeinfo);
-        M5.Rtc.setDateTime(&timeinfo);
-        Serial.printf("[NTP] RTC set to %04d-%02d-%02d %02d:%02d:%02d UTC\n",
-                      timeinfo.tm_year + 1900, timeinfo.tm_mon + 1,
-                      timeinfo.tm_mday, timeinfo.tm_hour,
-                      timeinfo.tm_min, timeinfo.tm_sec);
-        return true;
-    }
-
-    Serial.println("[NTP] RTC not enabled — time only valid until reboot");
-    return false;
-}
-
 static bool parseIsoUtc(const String& iso, struct tm& outTm) {
     memset(&outTm, 0, sizeof(outTm));
     const char* s = iso.c_str();
@@ -158,7 +117,7 @@ bool trySyncTimeFromSerial(unsigned long timeoutMs) {
     return false;
 }
 
-bool ensureRtcTime(bool allowWifiFallback) {
+bool ensureRtcTime() {
     if (rtcLooksSet()) {
         Serial.println("[Time] RTC already set — skipping sync");
         return true;
@@ -167,17 +126,6 @@ bool ensureRtcTime(bool allowWifiFallback) {
     delay(500);
     if (trySyncTimeFromSerial(4000)) return true;
 
-    if (!allowWifiFallback) {
-        Serial.println("[Time] RTC unset and WiFi fallback disabled");
-        return false;
-    }
-
-    Serial.println("[Time] Falling back to NTP over WiFi");
-    bool ok = false;
-    if (tryConnectSavedWifi()) {
-        ok = syncTimeFromNTP();
-    }
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
-    return ok;
+    Serial.println("[Time] RTC unset, no serial sync received");
+    return false;
 }

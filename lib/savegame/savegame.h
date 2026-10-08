@@ -3,7 +3,7 @@
 
 #include "storage.h"
 #include <M5Unified.h>
-#include <SD.h>
+#include <SD_MMC.h>
 #include <LittleFS.h>
 
 // Write a text file to SD (or LittleFS fallback). Returns true on success.

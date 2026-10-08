@@ -21,7 +21,7 @@ String saveGameRead(const char* path) {
 }
 
 void saveGameDelete(const char* path) {
-    if (isSdMounted() && SD.exists(path)) SD.remove(path);
+    if (isSdMounted() && SD_MMC.exists(path)) SD_MMC.remove(path);
     if (LittleFS.exists(path)) LittleFS.remove(path);
 }
 

@@ -33,13 +33,11 @@
 #include "storage.h"
 #include "time_sync.h"
 #include "touch.h"
-#include "wifi_setup.h"
 
 // #pragma GCC diagnostic ignored "-fpermissive"
 #include <FS.h>
 #include <M5GFX.h>
 #include <M5Unified.h>
-#include <SD.h>
 #include <SD_MMC.h>
 
 // Slim down the built-in CJK fonts.
@@ -78,22 +76,25 @@ void touchGameActivity() {
 // ============================================================
 // Two-button chord helper
 // ============================================================
-// Returns true once when A and B have been held together
-// continuously for at least `holdMs`. Must be called every loop.
 static bool chordTriggered(unsigned long holdMs = 1000) {
     static unsigned long chordStart = 0;
+    static bool consumed = false;
+
     bool both = M5.BtnA.isPressed() && M5.BtnB.isPressed();
 
     if (!both) {
         chordStart = 0;
+        consumed = false;
         return false;
     }
     if (chordStart == 0) {
         chordStart = millis();
         return false;
     }
+    if (consumed) return false;
+
     if (millis() - chordStart >= holdMs) {
-        chordStart = 0;      // consume the trigger
+        consumed = true;
         return true;
     }
     return false;
@@ -199,43 +200,44 @@ void enterReader() {
 // ============================================================
 // SD Card Initialization - Targeted for M5Stack PaperMono Lite
 // ============================================================
-
-SPIClass sdSPI(FSPI);
-
 bool initSDCard() {
-    Serial.println("Preparing PaperMono-Lite specialized filesystem interface...");
-    delay(250);
+    Serial.println("Initializing SD card via SDMMC 4-bit mode...");
 
-    auto mosi = M5.getPin(m5::pin_name_t::sd_spi_mosi);
-    auto miso = M5.getPin(m5::pin_name_t::sd_spi_miso);
-    auto sclk = M5.getPin(m5::pin_name_t::sd_spi_sclk);
-    auto cs   = M5.getPin(m5::pin_name_t::sd_spi_cs);
+    // 1. Enable SD card power (M5IOE1 PYG1)
+    auto& ioe1 = M5.getIOExpander(0);
+    ioe1.setHighImpedance(13, false);
+    ioe1.setDirection(13, true);
+    ioe1.digitalWrite(13, true);
+    delay(10);
 
-    Serial.printf("[SD Pins Debug] -> MOSI:%d | MISO:%d | SCLK:%d | CS:%d\n",
-                  mosi, miso, sclk, cs);
+    // 2. Get SDMMC pins
+    const int clk = M5.getPin(m5::pin_name_t::sd_mmc_clk);
+    const int cmd = M5.getPin(m5::pin_name_t::sd_mmc_cmd);
+    const int d0  = M5.getPin(m5::pin_name_t::sd_mmc_d0);
+    const int d1  = M5.getPin(m5::pin_name_t::sd_mmc_d1);
+    const int d2  = M5.getPin(m5::pin_name_t::sd_mmc_d2);
+    const int d3  = M5.getPin(m5::pin_name_t::sd_mmc_d3);
 
-    if (cs < 0 || mosi < 0 || miso < 0 || sclk < 0) {
-        Serial.println("❌ Critical Error: M5Unified could not load PaperMono Pin Maps.");
+    Serial.printf("[SDMMC Pins] CLK:%d CMD:%d D0:%d D1:%d D2:%d D3:%d\n",
+                  clk, cmd, d0, d1, d2, d3);
+
+    // 3. Configure pins and initialize (4-bit mode)
+    if (!SD_MMC.setPins(clk, cmd, d0, d1, d2, d3)) {
+        Serial.println("❌ SDMMC pin setup failed");
         return false;
     }
 
-    SD.end();
-    sdSPI.begin(sclk, miso, mosi, cs);
-
-    Serial.println("Mounting via dedicated SPI instance at 15MHz...");
-    if (SD.begin(cs, sdSPI, 15000000)) {
-        Serial.println("✅ SD Card initialized successfully via target FSPI!");
-        return true;
+    if (!SD_MMC.begin("/sdcard", false)) {  // false = 4-bit mode
+        Serial.println("❌ SDMMC 4-bit mount failed, trying 1-bit...");
+        if (!SD_MMC.begin("/sdcard", true)) {  // true = 1-bit fallback
+            Serial.println("❌ SDMMC 1-bit mount also failed");
+            return false;
+        }
     }
 
-    Serial.println("⚠️ 15MHz failed. Attempting 4MHz safe initialization frequency...");
-    if (SD.begin(cs, sdSPI, 4000000)) {
-        Serial.println("✅ SD Card initialized successfully in safe-mode (4MHz)!");
-        return true;
-    }
-
-    Serial.println("❌ Hard failure: SD card rejected communications over target FSPI lines.");
-    return false;
+    Serial.printf("✅ SD card mounted. Size: %llu MB\n",
+                  SD_MMC.cardSize() / (1024ULL * 1024ULL));
+    return true;
 }
 
 // ============================================================
@@ -288,42 +290,70 @@ void drawSleepClock() {
 // ============================================================
 static bool pickSleepBmpPath(String& outPath) {
     // ---- Try /sleep/ directory first ----
-    if (isSdMounted() && SD.exists("/sleep")) {
-        File dir = SD.open("/sleep");
+    if (isSdMounted() && SD_MMC.exists("/sleep")) {
+        File dir = SD_MMC.open("/sleep");
         if (dir && dir.isDirectory()) {
-            // Collect candidate .bmp files. Cap the count so a huge
-            // directory can't blow the stack.
-            const int MAX_CANDIDATES = 64;
-            String candidates[MAX_CANDIDATES];
+            // First pass: count eligible .bmp files.
+            // Skip macOS AppleDouble sidecars (._*) and any other
+            // dotfile, since those aren't real images.
             int count = 0;
-
-            while (count < MAX_CANDIDATES) {
+            while (true) {
                 File entry = dir.openNextFile();
                 if (!entry) break;
 
                 if (!entry.isDirectory()) {
                     String name = entry.name();
-                    String lower = name;
-                    lower.toLowerCase();
-                    if (lower.endsWith(".bmp")) {
-                        // SD.open gives us the base name; build the
-                        // full path so it's unambiguous.
-                        candidates[count] = String("/sleep/") + name;
-                        count++;
+                    if (!name.startsWith(".")) {
+                        String lower = name;
+                        lower.toLowerCase();
+                        if (lower.endsWith(".bmp")) count++;
                     }
                 }
                 entry.close();
             }
-            dir.close();
 
             if (count > 0) {
                 int pick = random(count);
-                outPath = candidates[pick];
-                Serial.printf("[Sleep] Picked %s (%d of %d)\n",
-                              outPath.c_str(), pick + 1, count);
-                return true;
+                dir.rewindDirectory();
+
+                // Second pass: advance to the picked index.
+                int seen = 0;
+                while (true) {
+                    File entry = dir.openNextFile();
+                    if (!entry) break;
+
+                    if (!entry.isDirectory()) {
+                        String name = entry.name();
+                        bool eligible = false;
+                        if (!name.startsWith(".")) {
+                            String lower = name;
+                            lower.toLowerCase();
+                            eligible = lower.endsWith(".bmp");
+                        }
+
+                        if (eligible) {
+                            if (seen == pick) {
+                                outPath = String("/sleep/") + name;
+                                entry.close();
+                                dir.close();
+                                Serial.printf("[Sleep] Picked %s (%d of %d)\n",
+                                              outPath.c_str(), pick + 1, count);
+                                return true;
+                            }
+                            seen++;
+                        }
+                    }
+                    entry.close();
+                }
+            } else {
+                Serial.println("[Sleep] /sleep has no eligible .bmp files");
             }
+            dir.close();
+        } else {
+            Serial.println("[Sleep] Failed to open /sleep as a directory");
         }
+    } else {
+        Serial.println("[Sleep] /sleep does not exist on SD");
     }
 
     // ---- Fall back to /sleep.bmp at the root ----
@@ -334,6 +364,7 @@ static bool pickSleepBmpPath(String& outPath) {
     }
 
     // ---- Nothing available ----
+    Serial.println("[Sleep] No sleep image found");
     outPath = "";
     return false;
 }
@@ -378,11 +409,14 @@ void enterSleep() {
     }
 
     if (!bmpRendered) {
-        M5.Display.setFont(&fonts::FreeSans24pt7b);
+        M5.Display.setFont(&fonts::FreeSansBold18pt7b);
         M5.Display.setTextColor(TFT_BLACK, TFT_WHITE);
-        M5.Display.drawString("Sleeping...", 120, 300);
+        M5.Display.drawString("Sleeping...", 140, 300);
         M5.Display.setFont(&fonts::FreeSans12pt7b);
-        M5.Display.drawString("Tap or press to wake", 140, 400);
+        M5.Display.drawString("No image found.", 140, 400);
+        M5.Display.drawString("Put .bmp in /sleep", 140, 450);
+        M5.Display.setFont(&fonts::FreeSans9pt7b);
+        M5.Display.drawString("Hold BtnA + BtnB to wake", 40, 760);
     }
 
     drawSleepClock();
@@ -459,25 +493,8 @@ void setup() {
 
     loadBrightnessPreference();
     
-    bool timeOk = ensureRtcTime(/*allowWifiFallback=*/true);
+    bool timeOk = ensureRtcTime();
     Serial.printf("[Boot] RTC time: %s\n", timeOk ? "set" : "unset");
-
-    // Sync NTP only if the RTC looks unset
-    bool needSync = true;
-    if (M5.Rtc.isEnabled()) {
-        auto dt = M5.Rtc.getDateTime();
-        if (dt.date.year >= 2024) {
-            needSync = false;
-        }
-    }
-
-    // Try saved WiFi credentials
-    /* bool wifiUp = tryConnectSavedWifi();
-    Serial.printf("[Boot] WiFi: %s\n", wifiUp ? "connected" : "offline");
-
-    if (wifiUp && needSync) {
-        syncTimeFromNTP();
-    } */
 
     enterLauncher();
 

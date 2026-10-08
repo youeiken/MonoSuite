@@ -10,7 +10,7 @@
 #include <LittleFS.h>
 #include <M5GFX.h>
 #include <M5Unified.h>
-#include <SD.h>
+#include <SD_MMC.h>
 #include <WString.h>
 #include <vector>
 

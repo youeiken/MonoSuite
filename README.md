@@ -23,7 +23,7 @@ image, with a shared header, save system, sleep screen, and RTC clock.
 ### Shared
 
 - **Sleep mode** — idle timeout or manual entry via A+B chord. Shows a clock, updates on the minute, wakes on A+B.
-- **RTC clock** — syncs from host over USB serial at boot, falls back to NTP over WiFi if enabled.
+- **RTC clock** — syncs from host over USB serial at boot.
 - **Header bar** — back button, centered clock, battery indicator, info modal.
 - **Save system** — per-app progress saved to SD or LittleFS, restored on next boot.
 - **Confirmation dialogs** — destructive actions (quit, restart) require a tap.
@@ -50,7 +50,6 @@ following structure before first boot:
 /fonts/NotoSansTC-Subset.ttf     # Reader: required TTF for CJK and Latin
 /sleep/*.bmp                     # Optional; shown on the sleep screen randomly
 /sokoban/*.xsb                   # Sokoban: one or more XSB level files
-/config/wifi.txt                 # Optional; see wifi.txt.example
 ```
 
 If the SD card is absent or fails to mount, the firmware falls back to
@@ -95,20 +94,18 @@ pio device monitor
 
 ### Time sync over serial
 
-At boot, the firmware waits up to a few seconds for a host time sync over
-USB serial. `scripts/send_time.py` implements this — it is registered as a
-PlatformIO post-upload hook, so a normal `pio run -t upload` sends the
-current UTC time to the device automatically.
-
-The protocol is a single line on the serial port:
+The firmware syncs the RTC from the host over USB serial at boot. `scripts/send_time.py` sends a single line:
 
 ```
 TIME=YYYY-MM-DDThh:mm:ssZ
 ```
 
-If no serial sync arrives and WiFi credentials are present, the firmware
-will attempt NTP instead. Adjust the local time offset by editing
-`TIME_SYNC_TZ_OFFSET_HOURS` in `platformio.ini`.
+This is registered as a PlatformIO post-upload hook, so a normal
+`pio run -t upload` syncs the clock automatically.
+
+There is no WiFi fallback — the radio stays off to preserve battery.
+If the serial sync doesn't arrive within a few seconds, the RTC is
+left unset and the clock falls back to counting from boot.
 
 ## Controls
 
@@ -187,9 +184,8 @@ MonoLauncher/
 │   ├── savegame/           SD/LittleFS save helpers
 │   ├── sokoban/            Sokoban
 │   ├── storage/            SD mount state + filesystem helpers
-│   ├── time_sync/          RTC, NTP, serial time sync
-│   ├── touch/              Touch calibration and mapping
-│   └── wifi_setup/         WiFi credential loading and connection
+│   ├── time_sync/          RTC + serial time sync
+│   └── touch/              Touch calibration and mapping
 └── scripts/
     ├── send_time.py        Host-side time sync (post-upload hook)
     ├── subset_font.py      Font subsetting utility (unused at runtime)
@@ -197,17 +193,6 @@ MonoLauncher/
 ```
 
 ## Configuration
-
-`wifi.txt` (optional) enables NTP time sync when no serial sync is
-available. Copy `wifi.txt.example` to `wifi.txt` and fill in your
-credentials:
-
-```
-ssid=YourNetwork
-password=YourPass
-```
-
-The file is read once at boot and is not committed to the repository.
 
 The local time offset is set at compile time via `TIME_SYNC_TZ_OFFSET_HOURS`
 in `platformio.ini`. The default is `8` (UTC+8).

@@ -9,10 +9,11 @@
 #include "savegame.h"
 #include <algorithm>
 #include <LittleFS.h>
-#include <SD.h>
+#include <SD_MMC.h>
 
 static void saveProgress();
 static bool loadProgress();
+static unsigned long s_searchDeadline = 0;
 
 // ============================================================
 // Game State
@@ -192,7 +193,8 @@ void applyMove(int b[64], int p, int r, int c) {
         }
     }
 
-    for (int i = 0; i < 64; i++) board[i] = nb[i];
+    // Write back to the caller's array, not the global board.
+    for (int i = 0; i < 64; i++) b[i] = nb[i];
 }
 
 int evaluate(int b[64]) {
@@ -241,25 +243,46 @@ void search(int b[64], int p, int depth, int alpha, int beta, int& bestMove, int
     std::vector<int> moves;
     getMoves(b, p, moves);
 
+    // Deadline check — bail out early if we've exceeded the time budget.
+    if (s_searchDeadline != 0 && millis() > s_searchDeadline) {
+        bestMove = moves.empty() ? -1 : moves[0];
+        bestScore = evaluate(b);
+        return;
+    }
+
+    // --- No legal move for p ---
     if (moves.empty()) {
         int opp = 3 - p;
         std::vector<int> oppMoves;
         getMoves(b, opp, oppMoves);
+
+        // Both sides stuck -> game is over.
         if (oppMoves.empty()) {
             bestMove = -1;
             bestScore = terminalScore(b);
             return;
         }
-        search(b, opp, depth, alpha, beta, bestMove, bestScore);
+
+        // p passes. If we're out of search depth, evaluate here;
+        // otherwise spend a ply on the pass and let the opponent move.
+        if (depth <= 0) {
+            bestMove = -1;
+            bestScore = evaluate(b);
+            return;
+        }
+
+        search(b, opp, depth - 1, alpha, beta, bestMove, bestScore);
         return;
     }
 
-    if (depth == 0) {
+    // --- Depth exhausted ---
+    if (depth <= 0) {
         bestMove = moves[0];
         bestScore = evaluate(b);
         return;
     }
 
+    // Order moves: corners first, then edges, then interior.
     std::sort(moves.begin(), moves.end(), [](int a, int b) {
         return moveKey(a) < moveKey(b);
     });
@@ -274,7 +297,7 @@ void search(int b[64], int p, int depth, int alpha, int beta, int& bestMove, int
             int r = idx / 8, c = idx % 8;
             int nb[64];
             for (int i = 0; i < 64; i++) nb[i] = b[i];
-            nb[r*8 + c] = p;
+            applyMove(nb, p, r, c);           // flips captured pieces
 
             int childMove, childScore;
             search(nb, 3 - p, depth - 1, alpha, beta, childMove, childScore);
@@ -294,7 +317,7 @@ void search(int b[64], int p, int depth, int alpha, int beta, int& bestMove, int
             int r = idx / 8, c = idx % 8;
             int nb[64];
             for (int i = 0; i < 64; i++) nb[i] = b[i];
-            nb[r*8 + c] = p;
+            applyMove(nb, p, r, c);           // flips captured pieces
 
             int childMove, childScore;
             search(nb, 3 - p, depth - 1, alpha, beta, childMove, childScore);
@@ -321,30 +344,38 @@ void playAI() {
         getMoves(board, WHITE, moves);
 
         if (!moves.empty()) {
-            int bestMove, bestScore;
+            int bestMove = -1;
+            int bestScore = 0;
+
+            s_searchDeadline = millis() + 1500;   // 1.5 s budget
             search(board, WHITE, AI_DEPTH, -1000000, 1000000, bestMove, bestScore);
+            s_searchDeadline = 0;
+
             if (bestMove == -1) bestMove = moves[0];
 
             int r = bestMove / 8, c = bestMove % 8;
             applyMove(board, WHITE, r, c);
             turn = BLACK;
-
             delay(100);
         } else {
+            // White passes.
             turn = BLACK;
         }
 
+        // If Black has a move, hand control back to the human.
         std::vector<int> blackMoves;
         getMoves(board, BLACK, blackMoves);
         if (!blackMoves.empty()) return;
 
+        // Black also has no move: does White have one?
         std::vector<int> whiteMoves;
         getMoves(board, WHITE, whiteMoves);
         if (whiteMoves.empty()) {
             rs_gameOver = true;
-            turn = 0;
             return;
         }
+
+        // Black passed; loop back so White plays again.
         turn = WHITE;
     }
 }
@@ -374,7 +405,11 @@ void onHumanPlace(int r, int c) {
 }
 
 void onHumanPass() {
+    if (history.size() > 64 * 20) {
+        history.erase(history.begin(), history.begin() + 64);
+    }
     for (int i = 0; i < 64; i++) history.push_back(board[i]);
+
     turn = WHITE;
     redrawReversi("You pass");
     delay(200);

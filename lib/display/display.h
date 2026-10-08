@@ -4,7 +4,7 @@
 #include <FS.h>
 #include <LittleFS.h>
 #include <M5Unified.h>
-#include <SD.h>
+#include <SD_MMC.h>
 
 #define EPD_QUALITY 0
 #define EPD_TEXT    1
@@ -32,7 +32,7 @@ inline void refreshDisplay() {
 }
 
 inline bool loadBMP(const char* path, int x, int y, int w = -1, int h = -1) {
-    if (!LittleFS.exists(path) && !SD.exists(path)) {
+    if (!LittleFS.exists(path) && !SD_MMC.exists(path)) {
         return false;
     }
     return M5.Display.drawBmpFile(path, x, y, w, h);

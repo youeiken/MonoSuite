@@ -1,7 +1,7 @@
 #include "ebook_txt.h"
 
 #include <LittleFS.h>
-#include <SD.h>
+#include <SD_MMC.h>
 
 static bool openReadableFile(const String& path, File& out) {
     return storageOpenRead(path.c_str(), out);

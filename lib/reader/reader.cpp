@@ -11,7 +11,7 @@
 #include "reader_font.h"
 #include <algorithm>
 #include <LittleFS.h>
-#include <SD.h>
+#include <SD_MMC.h>
 
 // ============================================================
 // Constants
@@ -26,7 +26,7 @@ static const int RESUME_MAX_BOOKS    = 16;
 static const int RESUME_RING_MAX     = 20;   // how many recent pages we remember
 static const char* FONT_PATH         = "/fonts/NotoSansTC-Subset.ttf";
 static const char* RESUME_PATH       = "/reader/reader_resume.txt";
-static const char* READER_PREFS_PATH = "/readaer/reader_prefs.txt";
+static const char* READER_PREFS_PATH = "/reader/reader_prefs.txt";
 static bool forceQualityNextPage     = false;
 
 // Resume save throttle
@@ -206,8 +206,8 @@ void scanDirectory(File& dir, String path) {
 void scanBooks() {
     books.clear();
 
-    if (isSdMounted() && SD.exists("/books")) {
-        File booksDir = SD.open("/books");
+    if (isSdMounted() && SD_MMC.exists("/books")) {
+        File booksDir = SD_MMC.open("/books");
         if (booksDir && booksDir.isDirectory()) {
             scanDirectory(booksDir, "/books");
             booksDir.close();
@@ -318,7 +318,7 @@ void openBook(int idx) {
     clearScreen();
     M5.Display.setFont(&fonts::FreeSans18pt7b);
     M5.Display.setTextColor(TFT_BLACK, TFT_WHITE);
-    M5.Display.drawString("Loading...", 40, 360);
+    M5.Display.drawString("Loading...", 140, 300);
     endDisplay();
 
     // Load the TTF once, before the async task spawns.
@@ -367,8 +367,8 @@ struct ResumeRecord {
 };
 
 static bool openResumeFileForRead(File& f) {
-    if (isSdMounted() && SD.exists(RESUME_PATH)) {
-        f = SD.open(RESUME_PATH, FILE_READ);
+    if (isSdMounted() && SD_MMC.exists(RESUME_PATH)) {
+        f = SD_MMC.open(RESUME_PATH, FILE_READ);
         return (bool)f;
     }
     if (LittleFS.exists(RESUME_PATH)) {
@@ -380,7 +380,7 @@ static bool openResumeFileForRead(File& f) {
 
 static bool openResumeFileForWrite(File& f) {
     if (isSdMounted()) {
-        f = SD.open(RESUME_PATH, FILE_WRITE);
+        f = SD_MMC.open(RESUME_PATH, FILE_WRITE);
     } else {
         f = LittleFS.open(RESUME_PATH, FILE_WRITE);
     }
@@ -872,11 +872,10 @@ void drawBrowser() {
     clearScreen();
 
     drawHeaderReader("");
-
-    M5.Display.setFont(&fonts::efontTW_24_b);
     if (books.size() == 0) {
-        M5.Display.drawString("No books found.", 20, 120);
-        M5.Display.drawString("Put " + ebookSupportedExtensions() + " in /books", 20, 160);
+        M5.Display.setFont(&fonts::FreeSans12pt7b);
+        M5.Display.drawString("No books found.", 140, 350);
+        M5.Display.drawString("Put " + ebookSupportedExtensions() + " in /books", 140, 400);
     } else {
         int visible = min(15, (int)books.size() - readerScroll);
         for (int i = 0; i < visible; i++) {
@@ -890,6 +889,7 @@ void drawBrowser() {
             if (selected) {
                 M5.Display.fillRect(10, y - 2, 460, 40, TFT_BLACK);
             }
+            M5.Display.setFont(&fonts::efontTW_24_b);
             M5.Display.setTextColor(selected ? TFT_WHITE : TFT_BLACK,
                                     selected ? TFT_BLACK : TFT_WHITE);
             M5.Display.drawString(name, 20, y + 4);
@@ -1073,7 +1073,7 @@ static RdGesture pollReaderGesture(int& tapX, int& tapY) {
 void saveReaderPrefs() {
     File f;
     if (isSdMounted()) {
-        f = SD.open(READER_PREFS_PATH, FILE_WRITE);
+        f = SD_MMC.open(READER_PREFS_PATH, FILE_WRITE);
     } else {
         f = LittleFS.open(READER_PREFS_PATH, FILE_WRITE);
     }
@@ -1084,8 +1084,8 @@ void saveReaderPrefs() {
 
 void loadReaderPrefs() {
     File f;
-    if (isSdMounted() && SD.exists(READER_PREFS_PATH)) {
-        f = SD.open(READER_PREFS_PATH, FILE_READ);
+    if (isSdMounted() && SD_MMC.exists(READER_PREFS_PATH)) {
+        f = SD_MMC.open(READER_PREFS_PATH, FILE_READ);
     } else if (LittleFS.exists(READER_PREFS_PATH)) {
         f = LittleFS.open(READER_PREFS_PATH, FILE_READ);
     }

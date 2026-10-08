@@ -2,12 +2,13 @@
 
 #include "miniz_epub.h"
 #include <algorithm>
+#include <cstdlib>
 #include <LittleFS.h>
-#include <SD.h>
+#include <SD_MMC.h>
 #include <vector>
 
 // ============================================================
-// Small XML helpers (unchanged from before)
+// Small XML helpers
 // ============================================================
 
 static bool startsWithCI(const char* s, const char* prefix) {
@@ -139,7 +140,7 @@ static void parseSpine(const String& opf, std::vector<SpineItem>& out) {
 }
 
 // ============================================================
-// XHTML -> plain text (kept close to original)
+// XHTML -> plain text
 // ============================================================
 
 static void stripXhtml(const uint8_t* xml, size_t len, String& out) {
@@ -295,7 +296,6 @@ static void parseNcx(const uint8_t* xml, size_t len,
     s.reserve(len);
     for (size_t i = 0; i < len; i++) s += (char)xml[i];
 
-    // Each <navPoint> ... <text>Title</text> ... <content src="href"/>
     int pos = 0;
     while ((pos = s.indexOf("<navPoint", pos)) >= 0) {
         int navEnd = s.indexOf("</navPoint>", pos);
@@ -335,22 +335,26 @@ static void parseNavXhtml(const uint8_t* xml, size_t len,
     s.reserve(len);
     for (size_t i = 0; i < len; i++) s += (char)xml[i];
 
-    // Look for <nav epub:type="toc"> ... </nav>
+    // Locate the TOC nav element.
     int navStart = s.indexOf("epub:type=\"toc\"");
     if (navStart < 0) navStart = s.indexOf("epub:type='toc'");
     if (navStart < 0) {
-        // Try role="doc-toc"
         navStart = s.indexOf("role=\"doc-toc\"");
         if (navStart < 0) navStart = 0;
     }
 
+    // Bound the scan to the </nav> that closes this element, so we
+    // don't pick up <a> tags from landmarks or page-list sections.
+    int navEnd = s.indexOf("</nav>", navStart);
+    if (navEnd < 0) navEnd = s.length();
+
     int pos = navStart;
-    while ((pos = s.indexOf("<a ", pos)) >= 0) {
+    while ((pos = s.indexOf("<a ", pos)) >= 0 && pos < navEnd) {
         int gt = s.indexOf('>', pos);
-        if (gt < 0) break;
+        if (gt < 0 || gt >= navEnd) break;
         String tag = s.substring(pos, gt + 1);
         int lt = s.indexOf("</a>", gt + 1);
-        if (lt < 0) break;
+        if (lt < 0 || lt >= navEnd) break;
 
         RawTocEntry e;
         e.href = getAttr(tag, "href");
@@ -371,13 +375,70 @@ static bool openReadableFile(const String& path, File& out) {
     return storageOpenRead(path.c_str(), out);
 }
 
+// ============================================================
+// Path normalization
+// ============================================================
+
+// Resolves "." and ".." segments in a ZIP-style path. Leading
+// slash is stripped. Backslashes are treated as separators too,
+// since some malformed EPUBs use them.
+//
+//   normalizeZipPath("OEBPS/../Text/a.xhtml") -> "Text/a.xhtml"
+//   normalizeZipPath("./a.xhtml")             -> "a.xhtml"
+//   normalizeZipPath("a//b/./c")              -> "a/b/c"
+//   normalizeZipPath("../a")                  -> "a"   (leading .. dropped)
+static String normalizeZipPath(const String& in) {
+    String s = in;
+    s.replace('\\', '/');
+    while (s.startsWith("/")) s = s.substring(1);
+
+    std::vector<String> stack;
+    int start = 0;
+    while (start <= (int)s.length()) {
+        int slash = s.indexOf('/', start);
+        if (slash < 0) slash = s.length();
+        String seg = s.substring(start, slash);
+        start = slash + 1;
+
+        if (seg.length() == 0 || seg == ".") continue;
+        if (seg == "..") {
+            if (!stack.empty()) stack.pop_back();
+            continue;
+        }
+        stack.push_back(seg);
+    }
+
+    String out;
+    for (size_t i = 0; i < stack.size(); i++) {
+        if (i > 0) out += '/';
+        out += stack[i];
+    }
+    return out;
+}
+
 // Normalize a possibly-relative href against a base dir.
+// Returns a clean ZIP entry name (no leading slash, no "." / "..").
 static String resolveHref(const String& baseDir, const String& href) {
     String h = href;
     int hash = h.indexOf('#');
-    if (hash > 0) h = h.substring(0, hash);
-    if (h.length() == 0 || h.startsWith("/")) return h;
-    return baseDir + h;
+    if (hash >= 0) h = h.substring(0, hash);
+    h.trim();
+    if (h.length() == 0) return "";
+
+    if (h.startsWith("/")) return normalizeZipPath(h);
+
+    String combined = baseDir;
+    if (combined.length() > 0 && !combined.endsWith("/")) combined += '/';
+    combined += h;
+    return normalizeZipPath(combined);
+}
+
+// Directory portion of a normalized path, with trailing slash.
+// Returns "" if the path has no directory component.
+static String dirOf(const String& path) {
+    int slash = path.lastIndexOf('/');
+    if (slash < 0) return "";
+    return path.substring(0, slash + 1);
 }
 
 // ============================================================
@@ -422,7 +483,7 @@ bool ebookEpubLoadDoc(const String& path, EbookDoc& doc) {
         heap_caps_free(epubBuf);
         return false;
     }
-    String opfPath = extractOpfPath(cont, cs);
+    String opfPath = normalizeZipPath(extractOpfPath(cont, cs));
     mz_free(cont);
     Serial.printf("[EPUB] OPF path = %s\n", opfPath.c_str());
     if (opfPath.length() == 0) {
@@ -461,8 +522,7 @@ bool ebookEpubLoadDoc(const String& path, EbookDoc& doc) {
         return false;
     }
 
-    int slash = opfPath.lastIndexOf('/');
-    String opfDir = (slash > 0) ? opfPath.substring(0, slash + 1) : "";
+    String opfDir = dirOf(opfPath);
 
     // Map id -> manifest item for quick lookup.
     auto findItem = [&](const String& id) -> const ManifestItem* {
@@ -491,11 +551,10 @@ bool ebookEpubLoadDoc(const String& path, EbookDoc& doc) {
         }
 
         EbookChapter ec;
-        ec.href = mi->href;
+        ec.href = mi->href;             // keep the raw manifest href
         ec.textOffset = text.length();
 
-        // Try to sniff a <title> from the chapter for use as a fallback.
-        // Cheap: scan first 2 KB.
+        // Sniff a <title> from the first 2 KB for use as a fallback.
         String chapterTitle;
         {
             size_t scan = xs < 2048 ? xs : 2048;
@@ -523,7 +582,7 @@ bool ebookEpubLoadDoc(const String& path, EbookDoc& doc) {
         doc.chapters.push_back(ec);
     }
 
-    // ---- Try to find and parse a TOC
+    // ---- Locate TOC sources
     const ManifestItem* ncxItem = nullptr;
     const ManifestItem* navItem = nullptr;
     for (const auto& it : manifest) {
@@ -536,27 +595,37 @@ bool ebookEpubLoadDoc(const String& path, EbookDoc& doc) {
         }
     }
 
+    // Parse the TOC, remembering which directory the entries are
+    // relative to (NCX and nav.xhtml each have their own base).
     std::vector<RawTocEntry> rawToc;
+    String tocBaseDir = opfDir;
+
     if (ncxItem) {
         String ncxPath = resolveHref(opfDir, ncxItem->href);
+        tocBaseDir = dirOf(ncxPath);
+
         size_t ns = 0;
         uint8_t* ncx = (uint8_t*)mz_zip_reader_extract_file_to_heap(
             &zip, ncxPath.c_str(), &ns, 0);
         if (ncx) {
             parseNcx(ncx, ns, rawToc);
             mz_free(ncx);
-            Serial.printf("[EPUB] NCX entries: %d\n", (int)rawToc.size());
+            Serial.printf("[EPUB] NCX entries: %d (base=%s)\n",
+                          (int)rawToc.size(), tocBaseDir.c_str());
         }
     }
     if (rawToc.empty() && navItem) {
         String navPath = resolveHref(opfDir, navItem->href);
+        tocBaseDir = dirOf(navPath);
+
         size_t ns = 0;
         uint8_t* nav = (uint8_t*)mz_zip_reader_extract_file_to_heap(
             &zip, navPath.c_str(), &ns, 0);
         if (nav) {
             parseNavXhtml(nav, ns, rawToc);
             mz_free(nav);
-            Serial.printf("[EPUB] nav.xhtml entries: %d\n", (int)rawToc.size());
+            Serial.printf("[EPUB] nav.xhtml entries: %d (base=%s)\n",
+                          (int)rawToc.size(), tocBaseDir.c_str());
         }
     }
 
@@ -568,7 +637,7 @@ bool ebookEpubLoadDoc(const String& path, EbookDoc& doc) {
         return false;
     }
 
-    // Collapse runs of 3+ newlines down to 2
+    // Collapse runs of 3+ newlines down to 2.
     while (text.indexOf("\n\n\n") >= 0) text.replace("\n\n\n", "\n\n");
 
     // ---- Move text into PSRAM
@@ -583,27 +652,20 @@ bool ebookEpubLoadDoc(const String& path, EbookDoc& doc) {
     doc.text = out;
     doc.textSize = n;
 
-    // ---- Resolve TOC hrefs to chapter indices + text offsets
+    // ---- Resolve TOC hrefs to chapter indices + text offsets.
+    // Both sides are normalized to ZIP entry names so the comparison
+    // is exact — no more fuzzy endsWith matching.
     for (const auto& raw : rawToc) {
         EbookTocEntry te;
         te.title = raw.title;
         te.chapterIndex = -1;
         te.textOffset = 0;
 
-        // Strip fragment for matching.
-        String target = raw.href;
-        int hash = target.indexOf('#');
-        if (hash > 0) target = target.substring(0, hash);
+        String resolved = resolveHref(tocBaseDir, raw.href);
 
-        // Normalize to the same form as chapters.
-        String resolved = resolveHref(opfDir, target);
-
-        // Match by comparing against the OPF-relative href stored on the
-        // chapter. We compare suffixes to be forgiving of "../" prefixes.
         for (size_t i = 0; i < doc.chapters.size(); i++) {
-            const String& chref = doc.chapters[i].href;
-            if (chref == raw.href || chref == target ||
-                resolved.endsWith(chref) || chref.endsWith(target)) {
+            String chapResolved = resolveHref(opfDir, doc.chapters[i].href);
+            if (chapResolved == resolved) {
                 te.chapterIndex = (int)i;
                 te.textOffset = doc.chapters[i].textOffset;
                 break;
