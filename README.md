@@ -211,7 +211,7 @@ by PlatformIO.
 
 ## License
 
-[MIT](LICENSE) © YOUEIKEN
+Maintained by @youeiken
 
 The bundled `lib/miniz/` directory is released under the MIT-0 / public
 domain license; see the header of `miniz.c` for the full text.
