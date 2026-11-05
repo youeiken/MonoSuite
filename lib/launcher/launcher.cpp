@@ -231,7 +231,7 @@ void drawLauncher() {
     // M5.Display.drawString("Hold BtnA + BtnB = Sleep/Wake", 20, 745);
 
     M5.Display.setFont(&fonts::FreeSansBold9pt7b);
-    M5.Display.drawString("MONO Launcher v1.0", 20, 760);
+    M5.Display.drawString("MONO Suite v1.0", 20, 760);
 
     endDisplay();
 }
@@ -499,7 +499,7 @@ void launcherLoop() {
                 "",
                 "Hold BtnA + BtnB = Sleep / Wake",
             };
-            showInfoModalAndWait("MONO Launcher v1.0", launcherHelp, 4);
+            showInfoModalAndWait("MONO Suite v1.0", launcherHelp, 4);
 
             // Redraw the launcher
             drawLauncher();

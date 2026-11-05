@@ -1,11 +1,11 @@
-# MonoLauncher
+# MonoSuite
 
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32--S3-orange?logo=platformio)](https://platformio.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A multi-app launcher for the **M5Stack Paper Mono Lite** (ESP32-S3, 480×800 e-paper).
 
-MonoLauncher bundles five small apps and an e-book reader into a single firmware
+MonoSuite bundles five small apps and an e-book reader into a single firmware
 image, with a shared header, save system, sleep screen, and RTC clock.
 
 ## Features
@@ -80,8 +80,8 @@ will be loaded in filename order.
 ### Build and upload
 
 ```bash
-git clone https://github.com/youeiken/MonoLauncher.git
-cd MonoLauncher
+git clone https://github.com/youeiken/MonoSuite.git
+cd MonoSuite
 pio run -t upload
 ```
 
@@ -164,7 +164,7 @@ roadmap and not yet implemented:
 ## Project layout
 
 ```
-MonoLauncher/
+MonoSuite/
 ├── platformio.ini          Build configuration
 ├── src/
 │   └── main.cpp            Boot sequence, mode dispatch, sleep handling
